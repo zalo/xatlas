@@ -814,6 +814,12 @@ static float length(const Vector3 &v)
 	return sqrtf(lengthSquared(v));
 }
 
+static float angle(const Vector3 &a, const Vector3 &b)
+{
+	const Vector3 c = cross(a, b);
+	return abs(atan2(length(c), dot(a, b)));
+}
+
 static bool isNormalized(const Vector3 &v, float epsilon = kNormalEpsilon)
 {
 	return equal(length(v), 1.0f, epsilon);
@@ -2707,9 +2713,26 @@ public:
 		const Vector3 &p0 = m_positions[m_indices[face * 3 + 0]];
 		const Vector3 &p1 = m_positions[m_indices[face * 3 + 1]];
 		const Vector3 &p2 = m_positions[m_indices[face * 3 + 2]];
-		const Vector3 e0 = p2 - p0;
-		const Vector3 e1 = p1 - p0;
-		const Vector3 normalAreaScaled = cross(e0, e1);
+		const Vector3 e00 = p2 - p0;
+		const Vector3 e01 = p1 - p0;
+		const Vector3 e10 = p0 - p1;
+		const Vector3 e11 = p2 - p1;
+		const Vector3 e20 = p1 - p2;
+		const Vector3 e21 = p0 - p2;
+
+		// use the corner whose angle is the closest to a right angle,
+		// as that will give the most stable results for the cross product calculation
+		const float diff0 = abs(3.14159265359f * 0.5f - angle(e00, e01));
+		const float diff1 = abs(3.14159265359f * 0.5f - angle(e10, e11));
+		const float diff2 = abs(3.14159265359f * 0.5f - angle(e20, e21));
+		Vector3 normalAreaScaled;
+		if (diff0 <= diff1 && diff0 <= diff2) {
+			normalAreaScaled = cross(e00, e01);
+		} else if (diff1 <= diff0 && diff1 <= diff2) {
+			normalAreaScaled = cross(e10, e11);
+		} else {
+			normalAreaScaled = cross(e20, e21);
+		}
 		return normalizeSafe(normalAreaScaled, Vector3(0, 0, 1));
 	}
 
@@ -9710,7 +9733,7 @@ void PackCharts(Atlas *atlas, PackOptions packOptions)
 #if XA_CHECK_PARAM_WINDING
 					uint32_t flippedCount = 0;
 					for (uint32_t f = 0; f < faceCount; f++) {
-						const float area = mesh->computeFaceParametricArea(f);
+						const float area = unifiedMesh->computeFaceParametricArea(f);
 						if (area < 0.0f)
 							flippedCount++;
 					}
